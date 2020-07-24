@@ -85,20 +85,23 @@ category_choice = function (config) {
             
             </div>`;
             $("#main").html(viewTemplate);
-
+            
             // Fade in of the buttons for a nicer appearance
             $(document).ready(function () {
                 $('#calibrationButton').fadeIn(1);
                 $('#option1').fadeIn(1);
                 $('#option2').fadeIn(1);
             });
-
-
+            
+            
             // When the calibrationbutton gets clicked, this function gets started
             // It gathers the trials starting time, the coordinates of the cursors click and with these calls the mousetracking
             // ------------------------------------------------------------------------------------
             function initialize(e) {
-
+                
+                // Set up event-handlers for the category selection
+                $('#option1').on("click", category_selection);
+                $('#option2').on("click", category_selection);
                 // Gather
                 startingTime = Date.now();
                 trial_data.startingTime = startingTime;
@@ -253,9 +256,7 @@ category_choice = function (config) {
             };
             //---------------------------------------------------------------------------------------------------
 
-            // Eventlisteners for our three different buttons
-            $('#option1').on("click", category_selection);
-            $('#option2').on("click", category_selection);
+            // Eventlisteners for the calibration-button
             $('#calibrationButton').on("click", initialize);
         }
     };
