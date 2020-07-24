@@ -9,8 +9,8 @@
 #calibrationButton {
     background-color: white; 
     position: fixed;
-    left: 960px;
-    top: 820px;
+    left: 50%;
+    bottom: 50%;
     color: red;
     text-align: center;
     text-decoration: none;
@@ -33,7 +33,7 @@
     position: fixed;
     left: 920px;
     top: 790px;
-    /* text-align: center; */
+    text-align: center;
     font-size: 48px;
     display: none;
 }
@@ -67,7 +67,7 @@
 }
 
 #option2{
-    position:absolute;
+    position:fixed;
     top:0;
     right:0;
     display: none;
