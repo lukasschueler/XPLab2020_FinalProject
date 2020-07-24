@@ -27,18 +27,39 @@ const instructions = magpieViews.view_generator("instructions", {
   The experiments set-up is quite simple:
   <br />
 
-  Before the beginning of each trial you press the little red button at the bottom of your screen. 
+  First you are shown the two possible categories. Take a second to get familiar with them.
+  Then, to start the trial, you press the little red button at the bottom of your screen. 
   <br />
   <br />
-  Afterwards the button will disappear and just above your cursor the word in question will appear. Immediately after that, two catgeories in the upper left and right corner respectively will be visible. 
+  Afterwards the button will disappear and just above your cursor the word in question will appear. 
   <br />
   <br />
 
-  You simply need to pick the correct category <b>as fast as you can</b>. 
+  Now you simply need to pick the correct category <b>as fast as you can</b>. 
   <br />
   That's already it! Let's begin with a short practice. 
   `,
   buttonText: 'Start practice'
+});
+
+// Technical instructions for our participants
+const tech = magpieViews.view_generator("instructions", {
+  trials: 1,
+  name: 'technicalities',
+  title: `Technicalities`,
+  text: `
+  <br />
+  <br />
+  <br />
+
+  To ensure the quality of your results, we would like to ask you to perform this experiment not on a tablet or smartphone and to use the ordinary full-screen of your browser.
+  <br />
+  <br />
+
+  And if it is not too cumbersome, you would greatly help us by using a mouse instead of the touchpad. But that really is not mandatory. 
+  We are already glad that you're here! 
+  `,
+  buttonText: 'Some more tech-stuff'
 });
 
 // Let the participant indicate its cursor device

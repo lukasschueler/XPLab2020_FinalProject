@@ -9,6 +9,7 @@ $("document").ready(function() {
     window.magpie_monitor = magpieInit({
         views_seq: [
             intro,
+            tech,
             mouse_question,
             hand_question,
             instructions,
