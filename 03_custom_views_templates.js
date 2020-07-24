@@ -74,8 +74,8 @@ category_choice = function (config) {
                 `<div class="magpie-view">
             <link rel="stylesheet" href="01_custom_styles.css">
             
-            <button id="option1" class='categoryButton'>${randomPlacement[0]}</button>
-            <button id="option2" class='categoryButton'>${randomPlacement[1]}</button>
+            <button id="upperLeft" class='categoryButton' value = "${randomPlacement[0]}">${randomPlacement[0]}</button>
+            <button id="upperRight" class='categoryButton' value = "${randomPlacement[1]}">${randomPlacement[1]}</button>
             <button id = "calibrationButton" >&#9673;</button>
             
             <div id="question">${question}</div><br>
@@ -89,8 +89,8 @@ category_choice = function (config) {
             // Fade in of the buttons for a nicer appearance
             $(document).ready(function () {
                 $('#calibrationButton').fadeIn(1);
-                $('#option1').fadeIn(1);
-                $('#option2').fadeIn(1);
+                $('#upperLeft').fadeIn(1);
+                $('#upperRight').fadeIn(1);
             });
             
             
@@ -100,8 +100,8 @@ category_choice = function (config) {
             function initialize(e) {
                 
                 // Set up event-handlers for the category selection
-                $('#option1').on("click", category_selection);
-                $('#option2').on("click", category_selection);
+                $('#upperLeft').on("click", category_selection);
+                $('#upperRight').on("click", category_selection);
                 // Gather
                 startingTime = Date.now();
                 trial_data.startingTime = startingTime;
@@ -205,8 +205,7 @@ category_choice = function (config) {
                 trial_data.RT = RT;
 
                 let correctness = "Incorrect";
-                let buttonPressed = this.id;
-                let answer = data[buttonPressed];
+                let answer = $(this).val();
 
                 // Check the correctness of the selection and if in training, give a short feedback
                 if (answer === correct) {
