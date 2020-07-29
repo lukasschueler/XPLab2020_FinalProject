@@ -88,7 +88,7 @@ category_choice = function (config) {
             
             // Fade in of the buttons for a nicer appearance
             $(document).ready(function () {
-                $('#calibrationButton').fadeIn(1);
+                $('#calibrationButton').delay(2000).show();
                 $('#upperLeft').fadeIn(1);
                 $('#upperRight').fadeIn(1);
             });

@@ -229,7 +229,23 @@ const trials = {
             
         },  
         {
-            question: "Shanghai",
+            question: "Peking",
+            option1: 'Non-Capital',
+            option2: "Capital",
+            correct: 'Capital',
+            typicality: "Atypical"
+            
+        },  
+        {
+            question: "Ottawa",
+            option1: 'Non-Capital',
+            option2: "Capital",
+            correct: 'Capital',
+            typicality: "Atypical"
+            
+        },  
+        {
+            question: "Saigon",
             option1: 'Non-Capital',
             option2: "Capital",
             correct: 'Non-Capital',
@@ -237,11 +253,27 @@ const trials = {
             
         },  
         {
-            question: "Toronto",
+            question: "Dubrovnik",
             option1: 'Non-Capital',
             option2: "Capital",
             correct: 'Non-Capital',
             typicality: "Atypical"
+            
+        },  
+        {
+            question: "Salzburg",
+            option1: 'Non-Capital',
+            option2: "Capital",
+            correct: 'Non-Capital',
+            typicality: "Typical"
+            
+        },  
+        {
+            question: "Las Vegas",
+            option1: 'Non-Capital',
+            option2: "Capital",
+            correct: 'Non-Capital',
+            typicality: "Typical"
             
         },  
         {

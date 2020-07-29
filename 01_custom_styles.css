@@ -15,7 +15,7 @@
     text-align: center;
     text-decoration: none;
     border : none;
-    display: inline-block;
+    display: none;
     font-size: 30px;
     margin: 4px 4px;
     transition-duration: 0.8s;

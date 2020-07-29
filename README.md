@@ -15,7 +15,7 @@ This experiment was built using [\_magpie](https://magpie-ea.github.io/magpie-si
 ## Running the experiment
 
 
-1. Online Link: xplabcategorization.netlify.app
+1. Online Link: https://xplabcategorization.netlify.app
 
 2. Offline: Clone the repository, run npm install and open index.html.
 
