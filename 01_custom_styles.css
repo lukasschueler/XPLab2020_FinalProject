@@ -7,6 +7,7 @@
 }
 
 #calibrationButton {
+    display: none;
     background-color: white; 
     position: fixed;
     left: 50%;
@@ -15,7 +16,6 @@
     text-align: center;
     text-decoration: none;
     border : none;
-    display: none;
     font-size: 30px;
     margin: 4px 4px;
     transition-duration: 0.8s;
