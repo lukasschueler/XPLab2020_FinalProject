@@ -205,7 +205,7 @@ const trials = {
             
         }, 
         {
-            question: "Moskau",
+            question: "Moscow",
             option1: 'Non-Capital',
             option2: "Capital",
             correct: 'Capital',
@@ -229,7 +229,7 @@ const trials = {
             
         },  
         {
-            question: "Peking",
+            question: "Beijing",
             option1: 'Non-Capital',
             option2: "Capital",
             correct: 'Capital',
