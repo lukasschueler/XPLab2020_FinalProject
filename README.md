@@ -1,7 +1,7 @@
 # Mousetracking of categorization-processes
 
 This experiment tries to replicate the first mousetracking-experiment of the paper "Graded Motor Responses in the time course of categorizing atypical exemplars" by Rick Dale and colleagues (2007). This replication is the final project of the course "Experimental Psychology Lab" by Prof. Michael Franke. 
-Authors of this code are Lars Weidtmann, Christina Popic, Julia Voss and Lukas Schüler.  
+Authors of this code are Lars Weidtmann, Christina Popic, Julia Voss and Lukas Schüler (Group10).  
 
 ## Experiment
 
