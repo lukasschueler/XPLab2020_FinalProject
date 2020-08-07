@@ -1,0 +1,764 @@
+---
+title: "Capital Study: Data Cleaning"
+author:  "Group 10"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    highlight: tango
+---
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, error = F, message = F, warning = F)
+
+```
+
+```{r libraries, include=FALSE, message=FALSE, warning=FALSE}
+
+# package for convenience functions (e.g. ggplot2, dplyr, etc.)
+library(tidyverse)
+
+# package for Bayesian regression modeling
+library(brms)
+
+# package for visualization
+library(tidybayes)
+
+# package to visualize 
+library(bayesplot)
+
+# package to extract HDIs
+library(HDInterval)
+
+# these options help Stan run faster
+options(mc.cores = parallel::detectCores())
+
+#devtools::install_github("michael-franke/aida-package")
+library(aida)
+
+# communication with Stan
+library(rstan)
+
+
+# use the aida-theme for plotting
+theme_set(theme_aida())
+
+# global color scheme / non-optimized
+project_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000")
+
+# setting theme colors globally
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = project_colors)
+}
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = project_colors)
+} 
+
+# define scale function to avoid matrix object in tibble
+my_scale <- function(x) c(scale(x))
+
+```
+
+```{r}
+#loading for analysis prepared data table
+capital <- read.csv('~/CS-SS20/Experimental_Psychology_Lab/Final_Project/XPLab2020_FinalProject/pilot/Capital_Study/capital_data_cleaning/capital_data.csv')
+
+capital
+```
+
+##Data Analysis - Original Study 
+
+For the main trials of our experiment we hold the following research hypotheses:
+
+H1: The area under the curve (AUC) is larger for atypical trials compared to typical trials.
+
+H2: The maximal absolute deviation (MAD) is larger for atypical trials compared to typical trials.
+
+H3: Movement duration is longer for atypical trials compared to typical trials.
+
+H4: The likelihood of obtaining different cluster types depends on the experimental conditions.
+
+H5: The total categorisation response time is longer for atypical trials compared to typical trials.
+
+H6: The movement initiation latency is longer for atypical trials compared to typical trials.
+
+H7: The distance travelled in pixels is longer for atypical trials compared to typical trials.
+
+#REGRESSION MODELS
+
+Hypothesis 1
+```{r}
+#Taking absolute AUC values, since negative AUC make no sense
+capital$AUC_abs = abs(capital$AUC)
+capital$AUC_abs_s = my_scale(capital$AUC_abs)
+
+#informative prior
+prior_hypo1 <- c(
+  #priors for all fixed effects (trial_type)
+  set_prior("student_t(3, -1, 2)", class = "sd"),
+  #prior for the Intercept
+  set_prior("student_t(3, 0, 2)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, -2, 2)", class = "sigma")
+)
+
+
+model_hypo1 = brm(
+  AUC_abs_s ~ trial_type +
+    (trial_type || subject_id)+
+    (1 |exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo1
+  )
+
+model_hypo1
+```
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo1)
+
+```
+
+```{r}
+# Extract the posteriors
+posteriors1_trial_type <- model_hypo1 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors1_trial_type
+
+# Extract the posteriors
+posteriors1 <- model_hypo1 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors1
+```
+
+```{r}
+
+# plot
+ggplot(data = posteriors1_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior AUC scaled")
+
+# plot the regression coefficients
+  ggplot(posteriors1, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\nAUC") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-10,10)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+```
+
+Results: Absolute, scaled AUC values are higher for Atypical than Typical trial types, due to the negative slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical includes 0, wherefore there is no compelling evidence for the hypothesis to hold true. 
+
+Hypothesis 2
+```{r}
+#Taking absolute AUC values, since negative AUC make no sense
+capital$MAD_abs = abs(capital$MAD)
+capital$MAD_abs_s = my_scale(capital$MAD_abs)
+
+#informative prior
+prior_hypo2 <- c(
+  #priors for all fixed effects (trial_type)
+  set_prior("student_t(3, 0, 2)", class = "sigma"),
+  #prior for the Intercept
+  set_prior("student_t(3, -1, 2)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, 0, 2)", class = "sd")
+)
+
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo2 = brm(
+  MAD_abs_s ~ trial_type +
+    (trial_type || subject_id)+
+    (1|exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo2
+  )
+
+model_hypo2
+
+```
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo2)
+```
+
+```{r}
+# Extract the posteriors
+posteriors2_trial_type <- model_hypo2 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors2_trial_type
+
+# Extract the posteriors
+posteriors2 <- model_hypo2 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors2
+
+```
+
+```{r}
+
+# plot
+ggplot(data = posteriors2_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior MAD scaled")
+
+# plot the regression coefficients
+  ggplot(posteriors2, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\nMAD") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-10,10)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+
+```
+
+Results: Absolute scaled MAD values are higher for Atypical than Typical trial types, due to the negative slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical includes 0, wherefore there is no compelling evidence for the hypothesis to hold true.
+
+
+Hypothesis 3
+```{r}
+
+capital$mousetrackingDuration_s = my_scale(capital$mousetrackingDuration)
+
+#informative prior
+prior_hypo3 <- c(
+  #priors for all fixed effects (trial_type)
+  set_prior("student_t(3, 0, 2)", class = "sigma"),
+  #prior for the Intercept
+  set_prior("student_t(3, -0.5, 2)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, 0, 2)", class = "sd")
+)
+
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo3 = brm(
+  mousetrackingDuration_s ~ trial_type +
+    (trial_type || subject_id)+
+    (1|exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo3
+  )
+
+model_hypo3
+
+```
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo3)
+
+```
+
+
+```{r}
+# Extract the posteriors
+posteriors3_trial_type <- model_hypo3 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors3_trial_type
+
+# Extract the posteriors
+posteriors3 <- model_hypo3 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors3
+
+```
+
+
+```{r}
+
+# plot
+ggplot(data = posteriors3_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior mousetrackingDuration scaled")
+
+# plot the regression coefficients
+  ggplot(posteriors3, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\nmousetrackingDuration") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-10,10)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+
+```
+
+Results: Scaled mousetracking Duration values are higher for Atypical than Typical trial types, due to the negative slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical includes 0, wherefore there is no compelling evidence for the hypothesis to hold true.
+
+Hypothesis 4
+```{r}
+
+capital$factor_prototype_label <- factor(capital$prototype_label)
+
+#multinomial logistic regression model 
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo4 <- brm(
+  factor_prototype_label ~ trial_type +
+    (trial_type || subject_id)+
+    (1|exemplar),
+  data = capital,
+  family = categorical(link = "logit", refcat = NULL)
+)
+
+model_hypo4
+
+
+```
+
+
+
+
+
+```{r}
+#fitting model to the actual data
+pp_check(model_hypo4)
+```
+
+```{r}
+#plotting marginal probabilities 
+marginal_effects(model_hypo4, "trial_type", categorical = TRUE)
+```
+
+```{r}
+#extracting posteriors
+predicted_hypo4 <- model_hypo4 %>%
+  spread_draws(b_mucurved_Intercept,
+               b_mudCoM_Intercept,
+               b_mustraight_Intercept,
+               b_mudCoM2_Intercept,
+               b_mucurved_trial_typeTypical,
+               b_mudCoM_trial_typeTypical,
+               b_mustraight_trial_typeTypical,
+               b_mudCoM2_trial_typeTypical) %>%
+  # mutating the parameters with their coefficient combination
+  mutate(curved_Atypical = plogis(b_mucurved_Intercept),
+         curved_Typical = plogis(b_mucurved_Intercept + b_mucurved_trial_typeTypical),
+         dCoM_Atypical = plogis(b_mudCoM_Intercept),
+          dCoM_Typical = plogis(b_mudCoM_Intercept + b_mudCoM_trial_typeTypical),
+         straight_Atypical = plogis(b_mustraight_Intercept),
+         straight_Typical = plogis(b_mustraight_Intercept + b_mustraight_trial_typeTypical),
+         dCoM2_Atypical = plogis(b_mudCoM2_Intercept),
+          dCoM2_Typical = plogis(b_mudCoM2_Intercept + b_mudCoM2_trial_typeTypical),
+         cCoM_Atypical = plogis(b_mucurved_Intercept + b_mudCoM_Intercept + b_mustraight_Intercept + b_mudCoM2_Intercept),
+         cCoM_Typical = plogis(b_mucurved_Intercept + b_mudCoM_Intercept + b_mustraight_Intercept + b_mucurved_trial_typeTypical +
+                             b_mudCoM_trial_typeTypical + b_mustraight_trial_typeTypical + b_mudCoM2_Intercept + b_mudCoM2_trial_typeTypical)) %>%
+  select(curved_Atypical, curved_Typical, dCoM_Atypical, dCoM_Typical, dCoM2_Atypical, dCoM2_Typical, straight_Atypical, straight_Typical, cCoM_Atypical, cCoM_Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  #muatating categories for cluster and condition for better plotting 
+   mutate(prototype = ifelse(parameter == "curved_Atypical" | parameter == "curved_Typical",
+                        "curved",ifelse(parameter == "dCoM_Atypical"|parameter == "dCoM_Typical", "dCoM", ifelse(parameter == "straight_Atypical"|parameter == "straight_Typical", "straight", ifelse(parameter == "dCoM2_Atypical" | parameter == "dCoM2_Typical",
+                        "dCoM2", "cCoM")))),
+          trial_type = ifelse(parameter == "curved_Atypical" | parameter == "dCoM_Atypical" | parameter == "straight_Atypical" | parameter == "cCoM_Atypical"| parameter == "dCoM2_Atypical",
+                        "Atypical", "Typical")) %>%
+  group_by(prototype, trial_type) %>%
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+
+predicted_hypo4
+
+
+```
+
+
+```{r}
+#plotting mean posterior probability of every prototype for each trial type
+ggplot(predicted_hypo4) +
+   geom_errorbar(aes(x = trial_type, y = mean_posterior, color = prototype,
+                    ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2,  position = position_dodge(width = 0.6)) +
+  geom_point(aes(x = trial_type, y = mean_posterior, fill = prototype),
+             size = 4, pch = 21, color = "black", position = position_dodge(0.6)) 
+
+
+```
+
+Results: The graph indicates the mean posterior probabilities of the prototypes for each trial type. There are strong differences of the prototypes cCoM and curved between Atypical and Typical, but for the other prototypes the difference is not as big. With dCoM2 it is the other way around: The mean posterior probability is much higher for the Atypical trial type than for the Typical trial type. This could mean that there is a higher probability for some prototypes to differ between the conditions and for ther prototypes this likelihood is lower.  
+
+Hypothese 5
+```{r}
+capital$RT_log <- log(capital$RT)
+capital$RT_log_s = my_scale(capital$RT_log)
+
+#informative priors
+prior_hypo5 <- c(
+  #priors for all fixed effects (trial_type)
+  set_prior("student_t(3, 0, 2)", class = "sigma"),
+  #prior for the Intercept
+  set_prior("student_t(3, 7, 2)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, 0, 2)", class = "sd")
+)
+
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo5 = brm(
+  RT_log ~ trial_type +
+    (trial_type || subject_id)+
+    (1 |exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo5
+  )
+
+
+model_hypo5
+
+
+```
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo5)
+
+```
+
+```{r}
+
+# Extract the posteriors
+posteriors5_trial_type <- model_hypo5 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors5_trial_type
+
+# Extract the posteriors
+posteriors5 <- model_hypo5 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors5
+
+
+```
+
+```{r}
+# plot
+ggplot(data = posteriors5_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior RT_log scaled")
+
+# plot the regression coefficients
+  ggplot(posteriors5, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\nRT_log") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-10,10)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+
+```
+
+Results: Log-transformed and scaled RT values are higher for Atypical than Typical trial types, due to the negative slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical includes 0, wherefore there is no compelling evidence for the hypothesis to hold true.
+
+Hypothesis 6
+```{r}
+capital$initiation_time_s = my_scale(capital$initiation_time)
+
+#informative priors
+prior_hypo6 <- c(
+  #priors for all fixed effects (trial_type)
+  set_prior("student_t(3, 300, 400)", class = "b"),
+  #prior for the Intercept
+  set_prior("student_t(3, 300,200)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, 0, 200)", class = "sd"),
+  set_prior("student_t(3, 0, 200)", class = "sigma")
+)
+
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo6 = brm(
+  initiation_time_s ~ trial_type +
+    (trial_type || subject_id)+
+    (1 |exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo6
+  )
+
+
+
+model_hypo6
+
+```
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo6)
+
+```
+
+```{r}
+
+# Extract the posteriors
+posteriors6_trial_type <- model_hypo6 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors6_trial_type
+
+# Extract the posteriors
+posteriors6 <- model_hypo6 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors6
+
+
+```
+
+```{r}
+# plot
+ggplot(data = posteriors6_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior initiation time")
+
+# plot the regression coefficients
+  ggplot(posteriors6, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\nInitiation Time") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-5000,5000)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+
+```
+
+Results: The scaled initiation time values are lower for Atypical than Typical trial types, due to the positive slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical includes 0, wherefore there is no compelling evidence for the hypothesis to hold true.
+
+Hypothese 7
+```{r}
+capital$traveledDistance_abs <- abs(capital$traveledDistance)
+capital$traveledDistance_abs_s <- my_scale(capital$traveledDistance_abs)
+
+#informative prior
+prior_hypo7 <- c(
+  #prior for the Intercept
+  set_prior("student_t(3, 10,15)", class = "Intercept"),
+  #prior for all SDs including the varying intercepts and slopes
+  set_prior("student_t(3, 0, 15)", class = "sd"),
+  set_prior("student_t(3, 0, 15)", class = "sigma")
+)
+
+#by-subject_id varying intercepts and varying 
+#slope, without slope/intercept correlation
+#by-exemplar varying intercept
+model_hypo7 = brm(
+  traveledDistance_abs_s ~ trial_type +
+    (trial_type || subject_id)+
+    (1 |exemplar),
+  control=list(adapt_delta=0.99, max_treedepth=15), 
+  data = capital,
+  prior = prior_hypo7
+  )
+
+
+model_hypo7
+
+```
+
+
+```{r}
+#fitting the model to the actual data
+pp_check(model_hypo7)
+
+```
+
+```{r}
+
+# Extract the posteriors
+posteriors7_trial_type <- model_hypo7 %>%
+  spread_draws(b_Intercept, 
+               b_trial_typeTypical) %>%
+  # calculate posteriors for each individual level
+  mutate(Atypical = b_Intercept,
+         Typical = b_Intercept + b_trial_typeTypical) %>% 
+  select(Atypical, Typical) %>% 
+  gather(key = "parameter", value = "posterior") %>% 
+  group_by(parameter) %>% 
+  summarise(mean_posterior = mean(posterior),
+            `95lowerCrI` = HDInterval::hdi(posterior, credMass = 0.90)[1],
+            `95higherCrI` = HDInterval::hdi(posterior, credMass = 0.90)[2])
+  
+posteriors7_trial_type
+
+# Extract the posteriors
+posteriors7 <- model_hypo7 %>%
+  spread_draws(b_trial_typeTypical) %>%
+  select(b_trial_typeTypical) %>% 
+  gather(key = "parameter", value = "posterior")  
+
+  
+posteriors7
+
+posterior7_agg <- posteriors7 %>% 
+  mutate(mean_posterior = mean(posterior))
+
+posterior7_agg
+
+```
+
+```{r}
+
+# plot
+ggplot(data = posteriors7_trial_type, 
+       aes(x = parameter, y = mean_posterior,
+           color = parameter, fill = parameter)) + 
+  geom_errorbar(aes(ymin = `95lowerCrI`, ymax = `95higherCrI`),
+                width = 0.2, color = "grey") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 4) +
+  labs(x = "trial_type",
+       y = "posterior traveled Distance")
+
+# plot the regression coefficients
+  ggplot(posteriors7, aes(x = posterior, y = parameter)) + 
+    # plot density 
+    geom_halfeyeh(.width = 0.95) +
+    # add axes titles
+    xlab("\n Traveled Distance") +
+    ylab("") +
+    # adjust the x-axis 
+    scale_x_continuous(limits = c(-500,500)) +
+    # add line for the value zero
+    geom_segment(x = 0, xend = 0, y = Inf, yend = -Inf,
+                 lty = "dashed")
+  
+#computing evidential ratio and posterior probability  
+hypothesis(model_hypo7, "trial_typeTypical > -42.19")  
+
+```
+
+Results: The scaled initiation time values are higher for Atypical than Typical trial types, due to the negative slope going from the reference level (Atypical) to the Typical trial type. The credible interval of the coefficient trial_typeTypical does not includes 0, wherefore there is evidence for the hypothesis to hold true. The evidence ratio is 1.11 and the posterior probability is 53%. This means that the strength of evidence is barely worth mentioning. 
