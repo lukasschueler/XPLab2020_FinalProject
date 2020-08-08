@@ -1,0 +1,240 @@
+---
+title: "Original Study: Data Visualization"
+author: "Group 10"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, error = F, message = F, warning = F)
+
+```
+
+```{r libraries, include=FALSE, message=FALSE, warning=FALSE}
+
+# package for convenience functions (e.g. ggplot2, dplyr, etc.)
+library(tidyverse)
+
+# package for visualization
+library(tidybayes)
+
+# package to visualize 
+library(bayesplot)
+
+# package to extract HDIs
+library(HDInterval)
+
+#devtools::install_github("michael-franke/aida-package")
+library(aida)
+
+# use the aida-theme for plotting
+theme_set(theme_aida())
+
+# global color scheme / non-optimized
+project_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000")
+
+# setting theme colors globally
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = project_colors)
+}
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = project_colors)
+} 
+
+# define scale function to avoid matrix object in tibble
+my_scale <- function(x) c(scale(x))
+
+```
+
+```{r}
+#loading for analysis prepared data table
+animal <- read.csv("animal_data.csv")
+
+```
+
+##Data Analysis - Original Study 
+
+For the main trials of our experiment we hold the following research hypotheses:
+
+H1: The area under the curve (AUC) is larger for atypical trials compared to typical trials.
+
+H2: The maximal absolute deviation (MAD) is larger for atypical trials compared to typical trials.
+
+H3: Movement duration is longer for atypical trials compared to typical trials.
+
+H4: The likelihood of obtaining different cluster types depends on the experimental conditions.
+
+H5: The total categorisation response time is longer for atypical trials compared to typical trials.
+
+H6: The movement initiation latency is longer for atypical trials compared to typical trials.
+
+H7: The distance travelled in pixels is  longer for atypical trials compared to typical trials.
+
+
+##Data Vizualisation 
+H1: The area under the curve (AUC) is larger for atypical trials compared to typical trials.
+```{r}
+#Taking absolute AUC values, since negative AUC make no sense
+animal$AUC_abs = abs(animal$AUC)
+
+#We take the median, because it is less influenced by outliers 
+median_AUC <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(AUC_median = median(AUC_abs, na.rm = TRUE)) 
+median_AUC
+
+#Plotting AUC_abs for each trial_type
+ggplot(animal,
+       aes(x = trial_type,
+           y = AUC_abs,
+           color = trial_type, fill = trial_type))+
+  geom_point(alpha = 0.5, size = 3)+
+  geom_point(data = median_AUC, aes(x= trial_type, y = AUC_median), color = "black", alpha = 1.0, size = 8, shape = 21)+
+  geom_point(data = median_AUC, aes(x= trial_type, y = AUC_median, color = trial_type), alpha = 1.0, size = 7)+
+  scale_y_continuous(limits = c(0,350000))+
+   ggtitle("Fig. 1: Absolute AUC for each trial type")
+
+```
+
+Fig. 1: The point plot shows the ablsoute Area under the Curve (AUC_abs) values for the respective trial type. The smaller points represent the AUC_abs values for every trial and the big points show the medians of AUC_abs for each trial type. The median AUC_abs values for the Atypical trial type is only slightly higher than for the Typical trial type, wherefore this difference might not be noteworthy.   
+
+H2: The maximal absolute deviation (MAD) is larger for atypical trials compared to typical trials.
+```{r}
+#Taking absolute MAD values, since negative MAD make no sense
+animal$MAD_abs = abs(animal$MAD)
+
+#We take the median, because it is less influenced by outliers 
+median_MAD <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(MAD_median = median(MAD_abs, na.rm = TRUE)) 
+median_MAD
+
+#Plotting MAD_abs for each trial_type
+ggplot(animal,
+       aes(x = trial_type,
+           y = MAD_abs,
+           color = trial_type, fill = trial_type))+
+  geom_point(alpha = 0.5, size = 3)+
+  geom_point(data = median_MAD, aes(x= trial_type, y = MAD_median), color = "black", alpha = 1.0, size = 8, shape = 21)+
+  geom_point(data = median_MAD, aes(x= trial_type, y = MAD_median, color = trial_type), alpha = 1.0, size = 7)+
+  scale_y_continuous(limits = c(0,1000))+
+   ggtitle("Fig. 2: Absolute MAD for each Trial Type")
+
+```
+
+Fig. 2: The point plot shows the ablsoute Maximum Absolute Deviation (MAD_abs) values for the respective trial type. The smaller points represent the MAD_abs values for every trial and the big points show the medians of MAD_abs for each trial type. The median MAD_abs values for the Atypical trial type is only slightly higher than for the Typical trial type, wherefore this difference might not be noteworthy.
+
+H3:Movement duration is longer for atypical trials compared to typical trials.
+```{r}
+#log-tranforming mousetracking duration values for better handling -> there are no negative mousetracking durations 
+animal$mousetrackingDuration_log <- log(animal$mousetrackingDuration)
+
+#We take the median, because it is less influenced by outliers
+median_move_dur <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(move_dur_median = median(mousetrackingDuration_log, na.rm = TRUE)) 
+median_move_dur
+
+#Plotting Mousetracking Duration for each trial type
+ggplot(data = animal,
+       aes(x = mousetrackingDuration_log,
+           color = trial_type, fill = trial_type))+
+  geom_density(alpha = 0.3)+
+  #Adding mean RT values as a dashed line 
+  geom_vline(data= median_move_dur, aes(xintercept= move_dur_median, color= trial_type), linetype = "dashed", size = 2)+
+  scale_fill_manual(values = c("orange", "blue"))+
+  scale_color_manual(values = c("orange", "blue"))+
+  scale_x_continuous(limits = c(5,10))+
+   ggtitle("Fig. 3: Mousetracking Duration for each Trial Type")
+
+```
+
+Fig. 3: The graph shows a density plot of the data displaying the median log-transformed mousetracking duration (move_dur_median) for each trial type (dashed lines) and the distribution of log transformed mousetracking duration for each trial type of each trial (colored density distribution for respective trial type). The log transformed mousetracking duration values for each trial type are similarly distributed. For the Typical trial type there is a high peak between [7,8] as well as for the Atypical trial type. The peak for the Atypical trial type is smaller than the Typical peak. The median of log transformed mousetracking duration values for the Atypical trial type is larger than for the Typical trial type. This difference might not be noteworthy.
+
+H4:The likelihood of obtaining different cluster types depends on the experimental conditions.
+
+- Please view plots "Percentage of prototypes" and "Classification of Prototypes for Trial_Type" in file animal_data_cleaning under ##CLUSTER AGGREGATION & PROTOTYPE CLASSIFICATION. 
+
+H5:The total categorisation response time is longer for atypical trials compared to typical trials.
+```{r}
+#log-tranforming RT values for better handling -> there are no negative RT 
+animal$RT_log <- log(animal$RT)
+
+#We take the median, because it is less influenced by outliers
+median_RT <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(RT_median = median(RT_log, na.rm = TRUE))
+
+#Plotting differnce in RT for respective conditions in desnity plot
+ggplot(data = animal,
+       aes(x = RT_log,
+           color = trial_type, fill = trial_type))+
+  geom_density(alpha = 0.3)+
+  #Adding mean RT values as a dashed line 
+  geom_vline(data= median_RT, aes(xintercept= RT_median, color= trial_type), linetype = "dashed", size = 2)+
+  scale_fill_manual(values = c("orange", "blue"))+
+  scale_color_manual(values = c("orange", "blue"))+
+  scale_x_continuous(limits = c(6,10))+
+   ggtitle("Fig. 4: RT for each trial type")
+
+```
+
+Fig. 4: The graph shows a density plot of the data displaying the median log-transformed mousetracking duration (move_dur_median) for each trial type (dashed lines) and the distribution of log transformed mousetracking duration for each trial type of each trial (colored density distribution for respective trial type). The log transformed mousetracking duration values for each trial type are similarly distributed. For the Typical trial type there is a high peak between [7,8] as well as for the Atypical trial type. The peak for the Atypical trial type is smaller than the Typical peak. The Atypical distribution has another small peak to the right-hand side. The median of log transformed mousetracking duration values for the Atypical trial type is larger than for the Typical trial type. This difference might not be noteworthy.
+
+#H6:The movement initiation latency is longer for atypical trials compared to typical trials.
+```{r}
+#log-tranforming initiation time values for better handling -> there are no negative initiation times
+animal$initiation_time_log <- log(animal$initiation_time)
+
+
+#We take the median, because it is less influenced by outliers
+median_ini_latency <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(ini_latency_median = median(initiation_time_log, na.rm = TRUE))
+
+#Plotting differnce in initiation time for respective conditions in density plot
+ggplot(data = animal,
+       aes(x = initiation_time_log,
+           color = trial_type, fill = trial_type))+
+  geom_density(alpha = 0.3)+
+  #Adding mean RT values as a dashed line 
+  geom_vline(data= median_ini_latency, aes(xintercept= ini_latency_median, color= trial_type), linetype = "dashed", size = 2)+
+  scale_fill_manual(values = c("orange", "blue"))+
+  scale_color_manual(values = c("orange", "blue"))+
+  scale_x_continuous(limits = c(-0,10))+
+   ggtitle("Fig. 5: Initiation Time for each trial type")
+
+```
+
+Fig. 5: The graph shows a density plot of the data displaying the median log-transformed initiation time (ini_latency_median) for each trial type (dashed lines) and the distribution of log-transformed initiation times for each trial type of each trial (colored density distribution for respective trial type). The log initiation time values are equally distributed with slight differences. The peak of Typical values is higher than the peak of Atypical values. The medians for both trial types are almost the same - the typical median is slightly larger. This difference might not be noteworthy. 
+
+
+
+#H7:The distance travelled in pixels is longer for atypical trials compared to typical trials.
+```{r}
+
+#We take the median, because it is less influenced by outliers
+median_travel_dis <- animal %>% 
+  group_by(trial_type) %>% 
+  dplyr::summarize(travel_dis_median = median(traveledDistance, na.rm = TRUE))
+
+#Plotting differnce in traveled distance for respective conditions in density plot
+ggplot(data = animal,
+       aes(x = traveledDistance,
+           color = trial_type, fill = trial_type))+
+  geom_density(alpha = 0.3)+
+  #Adding mean RT values as a dashed line 
+  geom_vline(data= median_travel_dis, aes(xintercept= travel_dis_median, color= trial_type), linetype = "dashed", size = 2)+
+  scale_fill_manual(values = c("orange", "blue"))+
+  scale_color_manual(values = c("orange", "blue"))+
+  scale_x_continuous(limits = c(0,300))+
+   ggtitle("Fig. 6: Traveled Distance for each trial type")
+
+```
+
+Fig. 6: The graph shows a density plot of the data displaying the median traveled distance (travel_dis__median) for each trial type (dashed lines) and the distribution of traveled distance for each trial type of each trial (colored density distribution for respective trial type). Both distributions have a high peak between [0,100], whereas the peak for Typical values is remarkably higher than the peak for Atypical values. The median for Atypical values is larger than the median of Typical values. This difference might however not be noteworthy.   
+

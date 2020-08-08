@@ -1,0 +1,350 @@
+---
+title: 'Capital Study: Data Cleaning'
+author:  "Group 10"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    highlight: tango
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, error = F, message = F, warning = F)
+
+```
+
+```{r libraries, include=FALSE, message=FALSE, warning=FALSE}
+
+# package for convenience functions (e.g. ggplot2, dplyr, etc.)
+library(tidyverse)
+
+# package for visualization
+library(tidybayes)
+
+#devtools::install_github("michael-franke/aida-package")
+library(aida)
+
+#for analysing mousetracking data
+library(mousetrap)
+
+#for bimodality check
+library(psych)
+
+# and our dataset, let's call it dolphin
+dolphin <- aida::aidata
+
+# use the aida-theme for plotting
+theme_set(theme_aida())
+
+# global color scheme / non-optimized
+project_colors = c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000")
+
+# setting theme colors globally
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = project_colors)
+}
+scale_fill_discrete <- function(...) {
+   scale_fill_manual(..., values = project_colors)
+} 
+
+# define scale function to avoid matrix object in tibble
+my_scale <- function(x) c(scale(x))
+
+```
+
+##Data Cleaning and Exclusion Criteria 
+- The final analysis will only concern itself with correct trials
+- Excluding all left-handed participants
+- Participants who make incorrect category judgements in all three practice trials will be discarded 
+- Data of participants who only have an accuracy of 50% will not be taken into account
+- Exclude all data from participants who complete the experiment in under 500 ms or take longer than 60000 ms
+- Trials which contain more than three flips along the y-axis will be taken out from the analysis
+- Exclude trail with seaturtle - (because we messed that one up)
+
+```{r}
+#import data 
+xdata_raw <- read_delim("Results_Table_Main.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+
+as.tibble(xdata_raw)
+
+#filter out test trials and subjects from pilot study
+xdata_new_capital <- xdata_raw %>% 
+  subset(submission_id != "1993" & submission_id != "1992" & submission_id != "1991" & submission_id != "1990" & submission_id != "1989" &
+           submission_id != "1611" & submission_id != "1640" & submission_id != "1641"
+         & submission_id != "1642" & submission_id != "1643" & submission_id != "1644")
+
+
+```
+
+##Original Experiment: Animal Data 
+
+#DATA EXCLUSION
+
+```{r}
+##1. Excluding all left-handed participants
+
+#create handedness table to merge with actual data 
+#necessary in order to filter out left handed participants
+xdata_handedness <- xdata_new_capital %>% 
+  select(submission_id, response, trial_name) %>% 
+  filter(trial_name == "mouse_question" | trial_name == "hand_question") %>% 
+  spread(trial_name, response)  
+   
+xdata_handedness
+
+##2. Participants who make incorrect category judgements in all three practice trials will be discarded 
+
+#creating table to discard subjects who failed all 3 training trials
+xdata_training_correct <- xdata_new_capital %>% 
+  select(submission_id, correctness, trial_name) %>% 
+    group_by(correctness, submission_id) %>% 
+  filter(trial_name == "training") %>% 
+  #count the amount of incorrect trials 
+  count(failed = correctness == "Incorrect") %>% 
+  #showing all subjects who failed all training trials
+  subset(failed == "TRUE" & n != 3)
+
+#there are no participants that failed all training trials   
+xdata_training_correct  
+
+
+
+#taking only the relevant participants for the pilot study 
+#excluding left-handed participants
+#only taking main trials
+xdata_main <- xdata_new_capital %>% 
+  #we only take the data from the capital study
+  filter(correct == "Capital" | correct == "Non-Capital") %>% 
+  #merge xdata with xdata_handedness
+  full_join(xdata_handedness) %>% 
+  #take all right handed participants
+  filter(hand_question == "Right") 
+ 
+
+xdata_main
+
+##3. Data of participants who only have an accuracy of 50% will not be taken into account
+
+
+#creating table to discard subjects who failed 50% of the answers 
+xdata_wrong <- xdata_new_capital %>% 
+  #take submission_id to see which subject failed 50% of the answers
+  group_by(submission_id) %>% 
+  #count all incorrect main trials per subject
+  count(failed = correctness == "Incorrect") %>%  
+  #take all subject with 50% wrong trials 
+  subset(failed == "TRUE" & n >=10)
+
+#there are no participants that got 50% of the answers wrong
+xdata_wrong
+
+##4. Exclude all data from participants who complete the experiment in under 500 ms or take longer than 6000 ms
+##5.The final analysis will only concern itself with correct trial
+
+xdata_capital <- xdata_main %>% 
+  #only taking correct trials into account
+  filter(correctness == "Correct") %>%  
+  # taking out subjects who are faster than 500 ms and slower than 1 min
+  subset(RT >= 500 & RT <= 60000 & submission_id != "2129") %>% 
+  #taking out for analysis non-relevant variables
+  select(-c(QUD, age, comments, education, MI, gender, languages, experiment_id,option1, option2, response,
+            trial_name, trial_number, hand_question, mouse_question))
+
+xdata_capital
+
+```
+
+- No subjects had all training trials wrong
+- Subject 2129 had 10 incorrect answers - taking out subject 2129
+
+##MOUSETRAP
+
+#TRAJECTORY PREPROCESSING
+
+```{r}
+#tibble into data frame for mousetrap object
+head(as.data.frame(xdata_capital))
+
+
+
+#creating mousetrap object for further anaylsis 
+mt_data_capital <- mt_import_mousetrap(xdata_capital)
+
+#all trajectories are remapped to the left 
+mt_data_capital <- mt_remap_symmetric(mt_data_capital)
+
+#setting the starting point of the trajectories equally 
+mt_data_capital <- mt_align_start(mt_data_capital, start=c(0,0))
+
+mt_data_capital <- mt_derivatives(mt_data_capital)
+#important for later creating MAD and AUC values 
+mt_data_capital <- mt_measures(mt_data_capital)
+
+#time-normalizing trajectories 
+mt_data_capital <- mt_time_normalize(mt_data_capital)
+
+
+#plot aggregated time-normalized trajectories 
+mt_plot_aggregate(mt_data_capital, use="tn_trajectories", x="xpos", y="ypos", color="typicality",
+subject_id="submission_id")+
+    ggtitle("Fig. 1")
+
+```
+
+Fig. 1: Display of over all trials avaraged trajactory for each trial type. All trajectories have been flipped to the left. Starting and end point was set equall over all trajectories of each trail type. 
+
+#AGGREGATE TRAJECTORY CURVATURE
+
+```{r}
+
+#aggregating maximum absolut deviation (MAD) values for analysis
+agg_mad_capital <- mt_aggregate_per_subject(mt_data_capital,
+use_variables="MAD", use2_variables="typicality",
+subject_id="submission_id")
+
+agg_auc_capital <- mt_aggregate_per_subject(mt_data_capital,
+use_variables="AUC", use2_variables="typicality",
+subject_id="submission_id")
+
+```
+
+#CLUSTER AGGREGATION & PROTOTYPE CLASSIFICATION
+
+```{r}
+
+#Spatialize trajectories 
+mt_data_capital <- mt_spatialize(mt_data_capital)
+
+#Cluster trajectories 
+mt_data_capital <- mt_cluster(mt_data_capital, use = "sp_trajectories")
+
+mt_plot(mt_prototypes,facet_col="mt_id",only_ggplot = TRUE)+
+  geom_path()+
+  facet_grid(cols = vars(factor(mt_id,levels=rownames(mt_prototypes))))+
+  theme(axis.text=ggplot2::element_blank(),axis.ticks=ggplot2::element_blank()) 
+
+mt_data_capital <- mt_map(mt_data_capital,prototypes = mt_prototypes,
+  save_as = "measures", grouping_variables = "typicality")
+mt_data_capital$data$prototype_label <- mt_data_capital$measures$prototype_label
+
+prototype_percentages <- mt_data_capital$data %>%
+  group_by(typicality,prototype_label) %>%
+  summarise(n=n()) %>%
+  mutate(Percent=paste(round(100*n/sum(n)),"%",sep=""))
+
+mt_plot(mt_data_capital, use = "sp_trajectories",
+  x = "xpos", y = "ypos", facet_col = "prototype_label", facet_row="typicality",alpha=.2)+
+  xlab("x coordinate (px)") + ylab("y coordinate (px)")+
+  geom_text(data=prototype_percentages,aes(label=Percent),x=650,y=50)+
+  scale_y_continuous(breaks=c(0,500,1000))+
+  coord_cartesian(xlim=c(-900,900))+
+    ggtitle("Fig. 1")
+```
+
+
+
+Fig. 1: The plot shows the percentages of trajectories for each trial type, which are assigned to the respective trajectory prototypes. 
+
+
+```{r}
+
+rel_freq_agg <- mt_data_capital$data %>%
+  group_by(typicality,prototype_label) %>%
+  summarise(n=n()) %>%
+  mutate(Percent=n/sum(n))
+
+ggplot(rel_freq_agg,aes(x=typicality,y=Percent,fill=forcats::fct_rev(prototype_label)))+
+  geom_bar(stat="identity",color="black")+
+  scale_fill_brewer(type="seq",name="Classification")+
+  facet_grid()+
+    ggtitle("Fig. 2")
+
+```
+
+
+Fig.2: The graph illustrates the proportion of trajectory prototypes for each trial type. The proportion is given in percent. 
+
+#Bimodality check
+
+```{r}
+
+# Standardize AUC per participant
+mt_data_capital <- mt_standardize(mt_data_capital, use_variables = "AUC", within = "submission_id")
+
+# Calculate bimodality coefficient
+ mt_check_bimodality(mt_data_capital, use_variables = "z_AUC",
+   grouping_variables = "typicality", methods = "BC")
+
+
+# Standardize MAD per participant
+mt_data_capital <- mt_standardize(mt_data_capital, use_variables = "MAD", within = "submission_id")
+
+# Calculate bimodality coefficient
+ mt_check_bimodality(mt_data_capital, use_variables = "z_MAD",
+   grouping_variables = "typicality", methods = "BC")
+
+# Standardize MAD per participant
+mt_data_capital <- mt_standardize(mt_data_capital, use_variables = "RT", within = "submission_id")
+
+# Calculate bimodality coefficient
+ mt_check_bimodality(mt_data_capital, use_variables = "z_RT",
+   grouping_variables = "typicality", methods = "BC")  
+ 
+ # Standardize MAD per participant
+mt_data_capital <- mt_standardize(mt_data_capital, use_variables = "initiation_time", within = "submission_id")
+
+# Calculate bimodality coefficient
+ mt_check_bimodality(mt_data_capital, use_variables = "z_initiation_time",
+   grouping_variables = "typicality", methods = "BC")
+
+```
+
+```{r}
+ 
+#plot trajectories 
+mt_heatmap_ggplot(mt_data_capital)
+
+
+#plot clustered trajectories 
+mt_plot(mt_data_capital,use="sp_trajectories",
+  use2="clustering",facet_col="cluster")+
+    ggtitle("Fig. 3")
+
+
+```
+
+
+
+Fig.3: The graph displays the given trajectories from the data for each cluster type.
+
+
+```{r}
+#store mousetrap object in results
+results <- merge(mt_data_capital$data, mt_data_capital$measures, by="mt_id")
+
+#export results in long format for further analysis 
+agg_xdata_capital <- mt_export_long(results)
+
+#as tibble for easier handling
+head(as.tibble(agg_xdata_capital))
+
+##6. Trials which contain more than three flips along the y-axis will be taken out from the analysis
+
+#creating final data table for bayesian inference 
+capital <- agg_xdata_capital %>% 
+    select(-c(endTime, mousetrackingStartTime, startDate, startTime, startingTime, timeSpent, xpos_max, xpos_min, xpos_reversals, ypos_max, ypos_min, MAD_time,MD_above, MD_above_time, RT.y, idle_time, vel_max, vel_max_time, vel_min, vel_min_time, acc_max, acc_max_time, min_dist, prototype, z_MAD, MD_below, MD_below_time, AD, ypos_reversals, acc_min, acc_min_time, originX, originY, prototype_label.x, correct)) %>% 
+  #taking out all trials which have 3 or more flips along the x and y-axis
+  subset(xpos_flips <= 3 & ypos_flips <= 3) %>% 
+  rename(RT = RT.x, unique_trial_id = mt_id, trial_type = typicality, prototype_label = prototype_label.y, subject_id = submission_id,
+         exemplar = question) 
+
+
+capital
+
+write.csv(capital, "~/CS-SS20/Experimental_Psychology_Lab/Final_Project/XPLab2020_FinalProject/main/Capital Study/capital_data.csv", row.names = FALSE)
+
+```
